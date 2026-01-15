@@ -1,0 +1,37 @@
+name: RK3128 单独编译 OpenWrt 固件【修复glib2+pcre2+无img】
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-openwrt-rk3128.yml'
+  workflow_dispatch:
+
+jobs:
+  build-openwrt:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 环境配置
+        run: |
+          sudo apt update -y && sudo apt install -y build-essential gcc g++ make patch unzip curl wget git libncurses5-dev libssl-dev flex bison zlib1g-dev gawk gettext subversion libxml-parser-perl xsltproc libglib2.0-dev libpcre2-dev
+          sudo timedatectl set-timezone Asia/Shanghai
+
+      - name: 拉取源码
+        uses: actions/checkout@v4
+
+      - name: 编译OpenWrt
+        run: |
+          git clone https://github.com/coolsnowwolf/lede openwrt
+          cd openwrt
+          cp -f ../openwrt_config/.config ./.config
+          patch -p1 < ../fix-glib2.patch
+          cp -rf ../openwrt_config/rk3128-patches/* package/kernel/linux/patches/
+          ./scripts/feeds update -a && ./scripts/feeds install -a
+          make defconfig && make -j$(nproc) download V=s
+          make -j$(nproc) V=s
+          cp -f bin/targets/rockchip/rk3128/*.img ../
+
+      - name: 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: RK3128-OpenWrt-固件-${{ github.run_id }}
+          path: '*.img'
