@@ -1,1 +1,102 @@
 
+/dts-v1/;
+#include "rk3128.dtsi"
+
+/ {
+model = "Rockchip RK3128 评估板";
+	compatible = "rockchip,rk3128-evb", "rockchip,rk3128";
+
+	aliases {
+		serial0 = &uart2;
+		ethernet0 = &emac;
+	};
+
+选定 {
+stdout-path = “serial0:115200n8”;
+	};
+
+	memory@60000000 {
+		device_type = "memory";
+		reg = <0x60000000 0x20000000>; // 512MB RAM 标准配置，RK3128通用
+	};
+
+	vcc5v: vcc5v-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc5v";
+		regulator-min-microvolt = <5000000>;
+调节器-最大微伏 = <5000000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+vcc33v: vcc33v-稳压器 {
+		compatible = "regulator-fixed";
+调节器名称 = “vcc33v”;
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc5v>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+};
+
+&emac {
+	phy-mode = "rmii";
+	phy-handle = <&phy0>;
+	phy0: ethernet-phy@0 {
+		reg = <0>;
+	};
+	pinctrl-names = "default";
+	pinctrl-0 = <&emac_xfer>, <&emac_mdio>;
+	status = "okay";
+};
+
+&mmc0 {
+	bus-width = <4>;
+	cd-gpios = <&gpio0 RK_PA5 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
+	max-frequency = <50000000>;
+	cap-sd-highspeed;
+	disable-wp;
+	status = "okay";
+};
+
+&mmc1 {
+总线宽度 = <8>;
+最大频率 = <150000000>;
+	cap-mmc-highspeed;
+	mmc-hs200-1_8v;
+不可拆卸;
+	status = "okay";
+};
+
+&uart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&uart2_xfer>;
+	status = "okay";
+};
+
+&usb_otg {
+	dr_mode = "host";
+	status = "okay";
+};
+
+&usb_host {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&gpio2 {
+	status = "okay";
+};
+
+&gpio3 {
+	status = "okay";
+};
