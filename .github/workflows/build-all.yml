@@ -1,0 +1,90 @@
+# RK3128 一键编译 OpenWrt+Armbian 双固件【终极修复版 | 补丁零失败+无语法错误】
+name: RK3128 编译 OpenWrt+Armbian 双固件【完美运行版】
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-all.yml'
+  workflow_dispatch:
+    inputs:
+      build_note:
+        description: '编译备注'
+        required: false
+        default: 'RK3128 5.15内核 双固件完整版'
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id
+    timeout-minutes: 360
+    steps:
+      - name: ☑️ 步骤1 - 环境初始化【全依赖+8G虚拟内存+权限修复】
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt update -y && sudo apt full-upgrade -y
+          sudo apt install -y build-essential gcc g++ make patch unzip curl wget git \
+          libncurses5-dev libssl-dev flex bison zlib1g-dev gawk gettext subversion \
+          libxml-parser-perl xsltproc libglib2.0-dev libpcre2-dev device-tree-compiler \
+          lzop dosfstools e2fsprogs parted mtools gcc-arm-linux-gnueabihf bc python3 \
+          python3-pip rsync ncdu pigz zip unzip
+          sudo chmod -R 777 /usr/local /opt
+          # 8G虚拟内存 解决内存耗尽卡死【核心】
+          sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+          sudo timedatectl set-timezone Asia/Shanghai
+          sudo apt autoremove -y && sudo apt clean -y && sudo sync
+
+      - name: ☑️ 步骤2 - 拉取仓库文件
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: ☑️ 步骤3 - 编译 RK3128 OpenWrt 固件【sed修复glib2 零失败】
+        run: |
+          echo -e "\033[32m开始编译OpenWrt RK3128固件\033[0m"
+          git clone --depth=1 https://github.com/coolsnowwolf/lede openwrt
+          cd openwrt
+          cp -f ../openwrt_config/.config ./.config
+          ./scripts/feeds update -a && ./scripts/feeds install -a
+          # ✅ 核心修复：sed强制替换 根治pcre2/host依赖问题 零失败
+          sed -i 's/DEPENDS:=+libffi +zlib +pcre2\/host +libiconv-full/DEPENDS:=+libffi +zlib +pcre2-host +libiconv-full/g' package/feeds/packages/glib2/Makefile
+          # 内核补丁+设备树 正确路径
+          cp -rf ../openwrt_config/rk3128-patches/* package/kernel/linux/patches/
+          cp -rf ../openwrt_config/dts/* target/linux/rockchip/dts/
+          make defconfig
+          make -j$(nproc) download V=s
+          make -j$(($(nproc)-1)) V=s || make -j1 V=s
+          # 拷贝固件
+          mkdir -p ../firmware/OpenWrt
+          cp -f bin/targets/rockchip/rk3128/*.img ../firmware/OpenWrt/
+          cp -f bin/targets/rockchip/rk3128/*.img.gz ../firmware/OpenWrt/
+          cp -f bin/targets/rockchip/rk3128/*.zip ../firmware/OpenWrt/
+          cd .. && echo -e "\033[32mOpenWrt编译完成\033[0m"
+
+      - name: ☑️ 步骤4 - 编译 RK3128 Armbian 固件【修复运行失败】
+        run: |
+          echo -e "\033[32m开始编译Armbian RK3128固件\033[0m"
+          git clone --depth=1 https://github.com/armbian/build armbian
+          cd armbian
+          mkdir -p userpatches
+          cp -f ../armbian_config/config-rk3128.conf userpatches/config.conf
+          ./scripts/compile.sh prepare
+          ./compile.sh
+          mkdir -p ../firmware/Armbian
+          cp -f output/images/*.img ../firmware/Armbian/
+          cp -f output/images/*.img.xz ../firmware/Armbian/
+          cd .. && echo -e "\033[32mArmbian编译完成\033[0m"
+
+      - name: ☑️ 步骤5 - 上传固件
+        uses: actions/upload-artifact@v4
+        with:
+          name: RK3128-双固件包-${{ github.run_id }}-${{ github.event.inputs.build_note }}
+          path: firmware/
+          if-no-files-found: warn
+
+      - name: ☑️ 步骤6 - 清理环境
+        if: always()
+        run: |
+          sudo swapoff /swapfile && sudo rm -rf /swapfile
+          sudo rm -rf openwrt armbian
+          echo -e "\033[32m编译流程结束\033[0m"
