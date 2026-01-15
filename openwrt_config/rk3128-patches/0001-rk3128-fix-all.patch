@@ -1,0 +1,46 @@
+--- a/arch/arm/boot/dts/rk3128.dtsi
++++ b/arch/arm/boot/dts/rk3128.dtsi
+@@ -123,6 +123,10 @@
+时钟 = <&cru SCLK_SDMMC>;
+时钟名称 = “clk_xin”;
+                pinctrl-names = "default";
++               bus-width = <4>;
++               cd-gpios = <&gpio0 RK_PA5 GPIO_ACTIVE_LOW>;
++               wp-gpios = <&gpio0 RK_PA6 GPIO_ACTIVE_HIGH>;
++               disable-wp;
+                status = "okay";
+        };
+
+@@ -201,6 +205,8 @@
+                compatible = "rockchip,rk3128-usb", "rockchip,rk3066-usb";
+                clocks = <&cru HCLK_OTG>;
+                clock-names = "otg";
++               dr_mode = "host";
++ 禁用过流；
+                status = "okay";
+        };
+
+--- a/drivers/mmc/host/sdhci-rockchip.c
++++ b/drivers/mmc/host/sdhci-rockchip.c
+@@ -102,6 +102,10 @@ static int sdhci_rockchip_probe(struct platform_device *pdev)
+返回 ret；
+        }
+
++ /* 修复RK3128 SD卡检测 */
++       host->quirks |= SDHCI_QUIRK_BROKEN_CARD_DETECTION;
++       host->quirks |= SDHCI_QUIRK_NO_SIMULTANEOUS_RW;
++
+        ret = mmc_of_parse(host->mmc);
+        if (ret)
+                goto clk_disable;
+--- a/arch/arm/configs/rockchip_linux_defconfig
++++ b/arch/arm/configs/rockchip_linux_defconfig
+@@ -56,6 +56,8 @@ CONFIG_ARM_ERRATA_798181=y
+ CONFIG_ARM_ERRATA_819472=y
+ CONFIG_ARM_ERRATA_826319=y
+ CONFIG_ARM_ERRATA_827419=y
++CONFIG_MMC_EMBEDDED_SDIO=y
++CONFIG_MMC_SDHCI_IO_ACCESSORS=y
+ CONFIG_SMP=y
+ CONFIG_SCHED_SMT=y
+ CONFIG_NR_CPUS=4
