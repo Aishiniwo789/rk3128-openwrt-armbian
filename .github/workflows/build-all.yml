@@ -1,6 +1,70 @@
 名称: RK3128 一键编译 OpenWrt+Armbian 双固件【全修复版】
+触发:
+  push:name: RK3128 一键编译 OpenWrt+Armbian 双固件【全修复版】
 on:
   push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/build-all.yml'
+  workflow_dispatch: # 手动触发编译，优先级最高
+
+jobs:
+  build-all:
+    runs-on: ubuntu-22.04
+    if: github.event.repository.owner.id == github.event.sender.id
+    steps:
+      - name: 1. 环境初始化 & 安装依赖【全量修复】
+        run: |
+          sudo apt update -y && sudo apt full-upgrade -y
+          sudo apt install -y build-essential gcc g++ make patch unzip curl wget git libncurses5-dev libssl-dev flex bison zlib1g-dev gawk gettext subversion libxml-parser-perl xsltproc libglib2.0-dev libpcre2-dev
+          sudo apt autoremove -y && sudo apt clean -y
+          sudo timedatectl set-timezone Asia/Shanghai
+
+      - name: 2. 拉取仓库源码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 3. 编译 RK3128 OpenWrt 固件【修复glib2+pcre2依赖+img打包】
+        run: |
+          git clone https://github.com/coolsnowwolf/lede openwrt
+          cd openwrt
+          # 应用RK3128配置文件
+          cp -f ../openwrt_config/.config ./.config
+          # 应用glib2依赖修复补丁
+          patch -p1 < ../fix-glib2.patch
+          # 应用RK3128内核补丁
+          cp -rf ../openwrt_config/rk3128-patches/* package/kernel/linux/patches/
+          cp -rf ../openwrt_config/dts/* arch/arm/boot/dts/
+          # 更新feeds & 编译
+          ./scripts/feeds update -a && ./scripts/feeds install -a
+          make defconfig
+          make -j$(nproc) download V=s
+          make -j$(nproc) V=s
+          # 拷贝OpenWrt固件到根目录
+          cp -f bin/targets/rockchip/rk3128/*.img ../
+          cp -f bin/targets/rockchip/rk3128/*.img.gz ../
+
+      - name: 4. 编译 RK3128 Armbian 固件【修复配置+运行失败】
+        run: |
+          git clone https://github.com/armbian/build armbian
+          cd armbian
+          # 应用RK3128专属配置
+          cp -f ../armbian_config/config-rk3128.conf userpatches/config.conf
+          # 编译Armbian
+          ./compile.sh BOARD=rk3128 ARCH=armhf KERNEL_VERSION=5.15.148 BUILD_MINIMAL=no BUILD_DESKTOP=no
+          # 拷贝Armbian固件到根目录
+          cp -f output/images/*.img ../
+          cp -f output/images/*.img.xz ../
+
+      - name: 5. 上传固件到Artifacts【可直接下载】
+        uses: actions/upload-artifact@v4
+        with:
+          name: RK3128-OpenWrt+Armbian-固件包-${{ github.run_id }}
+          path: |
+            *.img
+            *.img.gz
+            *.img.xz
     branches: [ main ]
 路径:
       - '.github/workflows/build-all.yml'
